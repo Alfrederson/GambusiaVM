@@ -2,14 +2,34 @@
 #analise{
   font-family: monospace;
 }
+textarea{
+  width:80%;
+}
 </style>
 
-<b>Colar o Hex aqui:</b><br/>
-<textarea id="hex"></textarea>
-<button onclick="analisar()">Clique aqui!</button>
+<b>Hex:</b><br/>
+<textarea id="hex"></textarea><br/>
+<button onclick="analisar()">OK!</button>
+<br/>
+<b>O que converter em HEX:</b>
+<br/>
+<textarea id="input"></textarea>
+<br/>
+<input type="number" id="start_pos" value="1000"/> Offset <br/>
+<input type="number" id="block_size" value="256"/> Tamanho do bloco<br/>
+
+<button onclick="converter()">OK!</button>
+<br/>
+<b>Resultado:</b>
+<br/>
+<textarea id="result"></textarea>
+
 <ul>
 <li>EOF : end of file</li>
-<li>ESA : </li>
+<li>ESA : Extended Segment Address</li>
+<li>SSA : Start Segment Address</li>
+<li>ELA : Extended Linear Address	</li>
+<li>SLA : Start Linear Address</li>
 
 </ul>
 <div id="analise">
@@ -20,10 +40,48 @@
 </p>
 
 <script>
+  function separar(str, size) {
+    const partes = Math.ceil(str.length / size)
+    const resultado = new Array(partes)
+
+    for (let i = 0, o = 0; i < partes; ++i, o += size) {
+      resultado[i] = str.substr(o, size)
+    }
+
+    return resultado
+  }
+
+
   let decode = document.getElementById("analise");
+  
+  function converter(){
+  	let block_size = parseInt(document.getElementById("block_size").value)
+  	let origin = document.getElementById("input").value.padEnd(block_size*2,"0")
+    let linhas = separar(origin,16*2)
+    let offset = parseInt(document.getElementById("start_pos").value)
+    
+    let resultado = linhas.map( linha =>{
+    	linha = linha.toUpperCase();
+    	let bc = Math.min(16, linha.length / 2)
+    	let rt = "00";
+      
+      
+      let start = bc.toString(16).padStart(2,"0") + offset.toString(16).padStart(4,"0") + rt + linha;
+      offset += linha.length / 2;
+      return ":" + start.toUpperCase() + calcular_checksum(start).padStart(2,"0") ;
+    })
+    
+    document.getElementById("result").value = resultado.join("\n");
+  }
 
   function calcular_checksum(data){
-    return "00";
+  	let bytes = data.length/2
+  	let sum = 0
+    for(let i = 0; i < bytes; i++){
+    	sum += parseInt(data.substr(i*2,2),16);
+    }
+    sum &= 0xFF;
+    return (256-sum).toString(16).toUpperCase();
   }
 
   function analisar(){
@@ -57,7 +115,7 @@
 
       let addr_text = parseInt(address,16).toString().padStart(4,"_"),
           bc_text   = bc.toString().padStart(2,"_");
-      let texto = `${bc_text} ${addr_text} ${rt[record_type]} ${data} (${data.length/2}) ${checksum}/${calcular_checksum(data)}`;
+      let texto = `${bc_text} ${addr_text} ${rt[record_type]} ${data} (${data.length/2}) ${checksum}/${calcular_checksum(linha.substr(1,linha.length-3))}`;
       size += bc;
       analise.innerText += texto + "\n";
     })
