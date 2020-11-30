@@ -1,92 +1,66 @@
-let stack = [0,0,0,0,0,0,0,0,0,0];
-let stack_top = -1;
-
-const push = valor => {
-	stack_top ++;
-  stack[stack_top] = valor;
+<style type="text/css">
+#analise{
+  font-family: monospace;
 }
+</style>
 
-const pop = () =>{
-	stack_top --;
-  return stack[stack_top+1];
-}
+<b>Colar o Hex aqui:</b><br/>
+<textarea id="hex"></textarea>
+<button onclick="analisar()">Clique aqui!</button>
+<ul>
+<li>EOF : end of file</li>
+<li>ESA : </li>
 
-const PUSH = 1,
-      ADD  = 2,
-      SUB  = 3,
-      DIV  = 4,
-      MUL  = 5,
-      OUT  = 6;
-      
-const OPCODE = 0,
-      ARG    = 1;
-/*      
-// programa gerado pelo compilador.
-Não sei como fazer isso funcionar ainda.
-2
-4
-5
-MUL
-ADD
-3
-ADD
-STORE x
-*/
+</ul>
+<div id="analise">
 
-let program = [
-	[PUSH,2],
-  [PUSH,4],
-  [PUSH,5],
-  [MUL],
-  [ADD],
-  [PUSH,3],
-  [ADD],
-  [OUT]
-]
+</div>
+<p>
 
-let program_counter = 0;
-let program_size    = program.length;
+</p>
 
-console.log("Programa tem "+program_size+" instruções");
+<script>
+  let decode = document.getElementById("analise");
 
-let instrucoes_executadas = 0;
-
-while(program_counter < program_size){
-	let a,b;
-	console.log(stack);
-	switch( program[program_counter][OPCODE] ){
-    // empurra o argumento na pilha
-  	case PUSH:
-    	push(program[program_counter][ARG]);
-    break;
-    case ADD:
-    	// pega os dois do alto da pilha, soma, coloca no lugar do segundo e faz um pop.
-      a = pop();
-      b = pop();
-      push ( a + b);
-    break;
-    case SUB:
-    	a = pop()
-      b = pop()
-      push ( a - b);
-    case MUL:
-      a = pop();
-      b = pop();
-      push ( a * b);    
-    break;
-    case DIV:
-    	a = pop()
-      b = pop()
-      push ( a / b);
-    break;
-      
-    case OUT:
-    	// Exibe o que estiver no alto da pilha e faz um pop.
-      console.log("OUT-- "+pop());
-    break;
+  function calcular_checksum(data){
+    return "00";
   }
-	program_counter++;
-	instrucoes_executadas++;
-}
 
-console.log(instrucoes_executadas + " instruções executadas.");
+  function analisar(){
+    analise.innerText = "";
+    let hex = document.getElementById("hex").value;
+
+    let linhas = hex.split("\n");
+
+    let size = 0;
+
+    linhas.forEach( linha =>{
+      // primeiro byte: byte count
+      let byte_count = linha.substr(1,2) // 2 digitos
+      // próximos 2 bytes: endereço
+      let address = linha.substr(3,4)    // 4 dígitos
+      let record_type = linha.substr(7,2) // record type
+      let bc = parseInt(byte_count,16)
+
+      let data = linha.substr(9, bc*2)
+
+      let checksum = linha.substr(9 + bc*2,2);
+
+      let rt = {
+        "00" : "DATA",
+        "01" : "EOF ",
+        "02" : "ESA ",
+        "03" : "SSA ",
+        "04" : "ELA ",
+        "05" : "SLA "
+      }
+
+      let addr_text = parseInt(address,16).toString().padStart(4,"_"),
+          bc_text   = bc.toString().padStart(2,"_");
+      let texto = `${bc_text} ${addr_text} ${rt[record_type]} ${data} (${data.length/2}) ${checksum}/${calcular_checksum(data)}`;
+      size += bc;
+      analise.innerText += texto + "\n";
+    })
+    analise.innerText += `Tamanho: ${size}`
+  }
+</script>
