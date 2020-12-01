@@ -6,23 +6,35 @@ textarea{
   width:80%;
 }
 </style>
+<p>
+Instruções de uso: copiar e colar o conteúdo do HEX aqui dentro.
+</p>
 
 <b>Hex:</b><br/>
 <textarea id="hex"></textarea><br/>
-<button onclick="analisar()">OK!</button>
+<button onclick="analisar(false)">OK!</button>
+<button onclick="analisar(true)">OK and show text</button>
 <br/>
-<b>O que converter em HEX:</b>
-<br/>
-<textarea id="input"></textarea>
+<textarea id="input">Botar isso lá dentro do hex!</textarea>
 <br/>
 <input type="number" id="start_pos" value="1000"/> Offset <br/>
-<input type="number" id="block_size" value="256"/> Tamanho do bloco<br/>
+<input type="number" id="block_size" value="256"/> Block size<br/>
 
-<button onclick="converter()">OK!</button>
+<button onclick="converter()">Convert to hex</button>
+<button onclick="graft()">Graft into DEADBEEF</button>
+
 <br/>
-<b>Resultado:</b>
+<b>Result (validate by pasting above):</b>
 <br/>
 <textarea id="result"></textarea>
+<br/>
+<b>PROGMEM block:</b>
+<br/>
+<input type="number" id="progmem_size" value="256"/> PROGMEM array size: <br/>
+<button onclick="progmem_make()">Generate</button>
+<br/>
+<textarea id="progmem_out"></textarea>
+<br/>
 
 <ul>
 <li>EOF : end of file</li>
@@ -40,6 +52,83 @@ textarea{
 </p>
 
 <script>
+	function graft(){
+  	// first decode the original hex into a long string
+    let result = "";
+    let text_to_insert = document.getElementById("input").value;
+    let hex = document.getElementById("hex").value;
+    let linhas = hex.split("\n");
+    // violating DRY whatever
+    linhas.forEach(linha =>{
+    	let byte_count = linha.substr(1,2) // 2 digitos
+      let address = linha.substr(3,4)    // 4 dígitos
+      let record_type = linha.substr(7,2) // record type
+      let bc = parseInt(byte_count,16)
+      let data = linha.substr(9, bc*2)
+      if(parseInt(record_type,16) === 0)
+      	result += data;
+    })
+    // we now have a long string with the entire contents of the .hex.
+    // find deadbeef
+    let start = result.indexOf("DEADBEEF")+8
+    let end   = result.lastIndexOf("DEADBEEF")
+    let room = (end-start)/2
+    let tam_trecho = text_to_insert.length
+    let bytes = []
+    
+    console.log( `${ room } bytes no slot` )
+    // escrever no máximo isso aí]
+    
+    console.log(`${ room - tam_trecho } restantes`)
+    if(tam_trecho > room){
+    	alert("Trecho comprido demais: "+(tam_trecho - room)+" bytes em excesso.")
+    }else{
+    	// começar a graftear
+      bytes = new Array(room);
+      bytes.fill(0)
+      for(let i =0 ; i < tam_trecho ; i++)
+      	bytes[i] = text_to_insert.charCodeAt(i)
+    }
+    // pegar o começo
+    // deadbeef fica no lugar
+    let novo = result.substr(0,start) + 
+               bytes.map( i => i.toString(16).padStart(2,0).toUpperCase() ).join("") +
+               result.substr(end)
+    console.log(novo.length - result.length)
+    
+    
+    let novas_linhas = separar(novo,16*2)
+    
+    let hex_novo = ""
+    let offset = 0;
+    let r = novas_linhas.map(linha => {
+    	// não precisa de uppercase aqui
+      let bc = Math.min(16, linha.length / 2)
+      let rt ="00";
+      let start = bc.toString(16).padStart(2,"0") + offset.toString(16).padStart(4,"0") + rt + linha;
+      offset += linha.length / 2;
+      return ":" + start.toUpperCase() + calcular_checksum(start) ;      
+    })
+    r.push(":00000001FF");
+    
+    document.getElementById("result").value = r.join("\n");
+  }
+	function progmem_make(){
+  	let tamanho = parseInt(document.getElementById("progmem_size").value);
+    let progmem = [];
+    
+    ['0xDE','0xAD','0xBE','0xEF'].forEach ( byte => progmem.push(byte));
+    let a_preencher = tamanho - 8;
+    for(let i = 0 ; i < a_preencher; i++)
+    	progmem.push("0x00");
+
+    ['0xDE','0xAD','0xBE','0xEF'].forEach ( byte => progmem.push(byte));
+    
+    let txt = progmem.join(",")
+    
+    document.getElementById("progmem_out").value = txt;
+  }
+  
   function separar(str, size) {
     const partes = Math.ceil(str.length / size)
     const resultado = new Array(partes)
@@ -56,7 +145,12 @@ textarea{
   
   function converter(){
   	let block_size = parseInt(document.getElementById("block_size").value)
-  	let origin = document.getElementById("input").value.padEnd(block_size*2,"0")
+  	let texto = document.getElementById("input").value;
+    let origin = "";
+    for(let i = 0 ; i < texto.length ; i++){
+    	origin += (texto.charCodeAt(i) & 0xFF).toString(16).padStart(2,"0");
+    }
+    origin = origin.padEnd(block_size*2,"0");
     let linhas = separar(origin,16*2)
     let offset = parseInt(document.getElementById("start_pos").value)
     
@@ -68,10 +162,14 @@ textarea{
       
       let start = bc.toString(16).padStart(2,"0") + offset.toString(16).padStart(4,"0") + rt + linha;
       offset += linha.length / 2;
-      return ":" + start.toUpperCase() + calcular_checksum(start).padStart(2,"0") ;
+      return ":" + start.toUpperCase() + calcular_checksum(start) ;
     })
     
+    resultado.push(":00000001FF");
+    
     document.getElementById("result").value = resultado.join("\n");
+    
+    
   }
 
   function calcular_checksum(data){
@@ -80,11 +178,21 @@ textarea{
     for(let i = 0; i < bytes; i++){
     	sum += parseInt(data.substr(i*2,2),16);
     }
-    sum &= 0xFF;
-    return (256-sum).toString(16).toUpperCase();
+    sum = (256 - sum) & 0xFF;
+    return sum.toString(16).toUpperCase().padStart(2,0);
+  }
+  
+  function hex_to_text(line){
+  	let result = "";
+    for(let i = 0 ; i < line.length/2;i++){
+    	let byte = line.substr(i*2,2);
+      let char = parseInt(byte,16);
+      result += String.fromCharCode(char).replace("\n","NL").padStart(2,".");
+    }
+    return result;
   }
 
-  function analisar(){
+  function analisar(to_text){
     analise.innerText = "";
     let hex = document.getElementById("hex").value;
 
@@ -115,10 +223,10 @@ textarea{
 
       let addr_text = parseInt(address,16).toString().padStart(4,"_"),
           bc_text   = bc.toString().padStart(2,"_");
-      let texto = `${bc_text} ${addr_text} ${rt[record_type]} ${data} (${data.length/2}) ${checksum}/${calcular_checksum(linha.substr(1,linha.length-3))}`;
+      let texto = `${bc_text} ${addr_text} ${rt[record_type]} ${to_text ? hex_to_text(data) : data} (${data.length/2}) ${checksum}/${calcular_checksum(linha.substr(1,linha.length-3))}`;
       size += bc;
       analise.innerText += texto + "\n";
     })
-    analise.innerText += `Tamanho: ${size}`
+    analise.innerText += `Total size: ${size}`
   }
 </script>
