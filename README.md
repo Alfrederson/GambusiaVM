@@ -40,3 +40,7 @@ JMP x = Pula para a posição X
 JZ x = Tira um valor do alto da pilha e pula para a posição X se o valor for zero
 
 END = termina a execução.
+
+#Observação
+
+Muita coisa mudou desde o primeiro commit.
